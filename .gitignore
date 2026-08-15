@@ -1,0 +1,17 @@
+# Environment
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+
+# Cassettes — ignore all recorded JSON, but keep the five demo cassettes
+cassettes/*.json
+!cassettes/sc-01*.json
+!cassettes/sc-02*.json
+!cassettes/sc-03*.json
+!cassettes/b-01*.json
+!cassettes/b-02*.json

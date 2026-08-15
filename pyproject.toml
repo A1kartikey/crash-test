@@ -1,0 +1,33 @@
+[project]
+name = "crashtest"
+version = "0.1.0"
+description = "Record adversarial agent failures as JSON cassettes; replay them as deterministic regression tests."
+requires-python = ">=3.10"
+dependencies = [
+    "openai>=1.0,<2",
+    "pydantic>=2.0,<3",
+    "typer>=0.9,<1",
+    "fastapi>=0.100,<1",
+    "uvicorn[standard]>=0.23,<1",
+    "pyyaml>=6.0,<7",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0,<9",
+]
+
+[project.scripts]
+crashtest = "crashtest.cli:app"
+
+[tool.setuptools.packages.find]
+include = ["crashtest*", "target_agent*"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.pytest.ini_options]
+markers = [
+    "live: marks tests requiring live OpenAI API access (deselect with '-m \"not live\"')"
+]

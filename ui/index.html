@@ -1,0 +1,774 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CrashTest — Flight Recorder</title>
+  <style>
+    :root {
+      --paper: #F2F0EB;
+      --ink: #14161A;
+      --muted: #6B7280;
+      --crash: #C4342B;
+      --pass: #1F7A4D;
+      --diverge: #B8730E;
+      --border: #D1CFCA;
+      --panel: #E8E5DF;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--paper);
+      color: var(--ink);
+      font-family: var(--sans);
+      font-size: 16px;
+      line-height: 1.5;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* Layout structure */
+    .app-header {
+      padding: 12px 24px;
+      border-bottom: 2px solid var(--ink);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: var(--paper);
+    }
+
+    .brand {
+      font-family: var(--mono);
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+    }
+
+    .container {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    /* Left Rail */
+    .sidebar {
+      width: 240px;
+      border-right: 2px solid var(--ink);
+      background: var(--panel);
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+    }
+
+    .sidebar-title {
+      font-family: var(--mono);
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      padding: 12px 16px;
+      color: var(--muted);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .cassette-item {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+      cursor: pointer;
+      background: transparent;
+      transition: background 0.15s ease;
+    }
+
+    .cassette-item:hover, .cassette-item:focus {
+      background: rgba(20, 22, 26, 0.05);
+      outline: none;
+    }
+
+    .cassette-item:focus-visible {
+      outline: 2px solid var(--ink);
+      outline-offset: -2px;
+    }
+
+    .cassette-item.active {
+      background: var(--paper);
+      font-weight: bold;
+      border-left: 4px solid var(--ink);
+    }
+
+    .cassette-id-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-family: var(--mono);
+      font-size: 14px;
+    }
+
+    .badge {
+      font-size: 10px;
+      padding: 2px 6px;
+      border-radius: 2px;
+      font-family: var(--mono);
+      text-transform: uppercase;
+      font-weight: bold;
+    }
+
+    .badge.adversarial {
+      background: rgba(196, 52, 43, 0.15);
+      color: var(--crash);
+    }
+
+    .badge.benign {
+      background: rgba(31, 122, 77, 0.15);
+      color: var(--pass);
+    }
+
+    .verdict-tag {
+      font-family: var(--mono);
+      font-size: 12px;
+      font-weight: bold;
+      margin-top: 4px;
+    }
+
+    .verdict-tag.PASS { color: var(--pass); }
+    .verdict-tag.CRASH { color: var(--crash); }
+    .verdict-tag.DIVERGED { color: var(--diverge); }
+
+    /* Main Content */
+    .main-view {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+      padding: 24px 32px 120px 32px;
+    }
+
+    .scenario-header {
+      margin-bottom: 24px;
+    }
+
+    .scenario-title {
+      font-size: 24px;
+      font-weight: 700;
+      color: var(--ink);
+    }
+
+    .scenario-persona {
+      color: var(--muted);
+      font-size: 15px;
+      margin-top: 4px;
+      font-family: var(--mono);
+    }
+
+    /* Signature Element — Tape Strip */
+    .tape-container {
+      margin: 20px 0 32px 0;
+      background: var(--panel);
+      border: 2px solid var(--ink);
+      padding: 16px;
+      position: relative;
+    }
+
+    .tape-label {
+      font-family: var(--mono);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+
+    .tape-track {
+      display: flex;
+      height: 48px;
+      position: relative;
+      background: var(--paper);
+      border: 1px solid var(--border);
+    }
+
+    .tape-segment {
+      flex: 1;
+      border-right: 1px solid var(--border);
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    .tape-segment:last-child {
+      border-right: none;
+    }
+
+    /* Tool notch */
+    .tape-notch {
+      position: absolute;
+      bottom: 2px;
+      width: 12px;
+      height: 6px;
+      background: var(--ink);
+      border-radius: 1px;
+    }
+
+    /* Crisp Red Splice Mark */
+    .tape-splice {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: rgba(196, 52, 43, 0.2);
+      border: 2px solid var(--crash);
+    }
+
+    .tape-splice::after {
+      content: "SPLICE 💥";
+      position: absolute;
+      top: 2px;
+      right: 4px;
+      font-family: var(--mono);
+      font-size: 9px;
+      font-weight: bold;
+      color: var(--crash);
+    }
+
+    /* Playhead */
+    .playhead {
+      position: absolute;
+      top: -4px;
+      bottom: -4px;
+      width: 4px;
+      background: var(--ink);
+      left: 0%;
+      z-index: 10;
+      display: none;
+      box-shadow: 0 0 4px rgba(0,0,0,0.5);
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .playhead {
+        transition: none !important;
+      }
+    }
+
+    /* Transcript Turns */
+    .transcript {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .turn-card {
+      border: 1px solid var(--border);
+      background: #FAF8F5;
+      padding: 16px;
+      position: relative;
+    }
+
+    /* Crash Turn Outlined in --crash */
+    .turn-card.crash-turn {
+      border: 2px solid var(--crash);
+      background: rgba(196, 52, 43, 0.04);
+      box-shadow: 0 0 8px rgba(196, 52, 43, 0.15);
+    }
+
+    .turn-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+
+    .role-label {
+      font-family: var(--mono);
+      font-size: 13px;
+      font-weight: bold;
+      text-transform: uppercase;
+    }
+
+    .role-label.attacker { color: #0284C7; }
+    .role-label.agent { color: var(--pass); }
+    .role-label.tool { color: #D97706; }
+
+    .turn-number {
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .turn-content {
+      font-family: var(--mono);
+      font-size: 14px;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .tool-block {
+      margin-top: 12px;
+      padding: 10px;
+      background: var(--paper);
+      border: 1px dashed var(--border);
+      font-family: var(--mono);
+      font-size: 13px;
+    }
+
+    .tool-name {
+      font-weight: bold;
+      color: #B45309;
+    }
+
+    /* Assertion Failure Evidence Box directly beneath crash turn */
+    .crash-evidence {
+      margin-top: 12px;
+      padding: 10px 14px;
+      background: rgba(196, 52, 43, 0.1);
+      border-left: 4px solid var(--crash);
+      font-family: var(--mono);
+      font-size: 13px;
+      color: var(--crash);
+    }
+
+    .crash-evidence-title {
+      font-weight: bold;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      font-size: 11px;
+      margin-bottom: 4px;
+    }
+
+    .divergence-banner {
+      margin-top: 8px;
+      padding: 8px 12px;
+      background: rgba(184, 115, 14, 0.15);
+      border-left: 4px solid var(--diverge);
+      font-family: var(--mono);
+      font-size: 13px;
+      color: var(--diverge);
+      font-weight: bold;
+    }
+
+    /* Sticky Footer Bar */
+    .footer-bar {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: var(--paper);
+      border-top: 2px solid var(--ink);
+      padding: 16px 32px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      z-index: 100;
+      box-shadow: 0 -4px 12px rgba(0,0,0,0.05);
+    }
+
+    .controls {
+      display: flex;
+      gap: 12px;
+    }
+
+    .btn {
+      font-family: var(--mono);
+      font-size: 14px;
+      font-weight: bold;
+      padding: 10px 18px;
+      border: 2px solid var(--ink);
+      background: var(--paper);
+      color: var(--ink);
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .btn:hover:not(:disabled) {
+      background: var(--ink);
+      color: var(--paper);
+    }
+
+    .btn:focus-visible {
+      outline: 3px solid var(--diverge);
+      outline-offset: 2px;
+    }
+
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .verdict-strip {
+      display: flex;
+      align-items: center;
+      gap: 24px;
+    }
+
+    /* Verdict 32px+ Monospace for 4-meter projection legibility */
+    .big-verdict {
+      font-family: var(--mono);
+      font-size: 36px;
+      font-weight: 900;
+      letter-spacing: -1px;
+    }
+
+    .big-verdict.PASS { color: var(--pass); }
+    .big-verdict.CRASH { color: var(--crash); }
+    .big-verdict.DIVERGED { color: var(--diverge); }
+
+    .verdict-meta {
+      font-family: var(--mono);
+      font-size: 14px;
+      color: var(--muted);
+      display: flex;
+      flex-direction: column;
+    }
+
+    .error-toast {
+      padding: 12px 16px;
+      background: rgba(196, 52, 43, 0.1);
+      border: 1px solid var(--crash);
+      color: var(--crash);
+      font-family: var(--mono);
+      font-size: 13px;
+      margin-top: 16px;
+      display: none;
+    }
+
+    .empty-state {
+      padding: 48px;
+      text-align: center;
+      font-family: var(--mono);
+      color: var(--muted);
+    }
+
+    .empty-state-cmd {
+      margin-top: 12px;
+      display: inline-block;
+      padding: 8px 16px;
+      background: var(--ink);
+      color: var(--paper);
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+
+  <header class="app-header">
+    <div class="brand">CRASHTEST</div>
+    <div id="health-status" style="font-family: var(--mono); font-size: 12px; color: var(--pass);">
+      ● OFFLINE READY
+    </div>
+  </header>
+
+  <div class="container">
+    <!-- Left Rail -->
+    <nav class="sidebar" aria-label="Cassettes">
+      <div class="sidebar-title">Cassettes</div>
+      <div id="cassette-list"></div>
+    </nav>
+
+    <!-- Main View -->
+    <main class="main-view">
+      <div id="empty-state" class="empty-state" style="display: none;">
+        <div>No cassettes found. Record an adversarial scenario to begin.</div>
+        <div class="empty-state-cmd">crashtest record sc-01</div>
+      </div>
+
+      <div id="detail-view">
+        <div class="scenario-header">
+          <h1 id="scenario-title" class="scenario-title">Select a cassette</h1>
+          <div id="scenario-persona" class="scenario-persona"></div>
+        </div>
+
+        <!-- Tape Strip -->
+        <div class="tape-container">
+          <div class="tape-label">FLIGHT RECORDING TAPE</div>
+          <div id="tape-track" class="tape-track">
+            <div id="playhead" class="playhead"></div>
+          </div>
+        </div>
+
+        <!-- Error Box -->
+        <div id="error-toast" class="error-toast"></div>
+
+        <!-- Transcript -->
+        <div id="transcript" class="transcript"></div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Sticky Footer Bar -->
+  <footer class="footer-bar">
+    <div class="controls">
+      <button id="btn-replay-frozen" class="btn" onclick="runReplay('frozen')">
+        Replay frozen ×5
+      </button>
+      <button id="btn-replay-live" class="btn" onclick="runReplay('verify')">
+        Replay live ×5
+      </button>
+    </div>
+
+    <div class="verdict-strip">
+      <div id="big-verdict" class="big-verdict">—</div>
+      <div class="verdict-meta">
+        <span id="verdict-summary" style="font-weight: bold; color: var(--ink);">Select a cassette to replay</span>
+        <span id="verdict-details">network calls: 0</span>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    let currentCassetteId = null;
+    let currentCassette = null;
+    let divergenceMsgs = [];
+
+    async function init() {
+      try {
+        const res = await fetch('/api/cassettes');
+        if (!res.ok) throw new Error('Failed to load cassettes');
+        const cassettes = await res.json();
+        
+        if (cassettes.length === 0) {
+          showEmptyState();
+          return;
+        }
+
+        renderCassetteList(cassettes);
+        selectCassette(cassettes[0].id);
+      } catch (err) {
+        showError("Could not connect to CrashTest API. Run 'crashtest serve' to start the server.");
+      }
+    }
+
+    function showEmptyState() {
+      document.getElementById('detail-view').style.display = 'none';
+      document.getElementById('empty-state').style.display = 'block';
+    }
+
+    function renderCassetteList(cassettes) {
+      const listEl = document.getElementById('cassette-list');
+      listEl.innerHTML = cassettes.map(c => `
+        <div class="cassette-item ${c.id === currentCassetteId ? 'active' : ''}" 
+             tabindex="0" 
+             onclick="selectCassette('${c.id}')"
+             onkeydown="if(event.key==='Enter') selectCassette('${c.id}')">
+          <div class="cassette-id-row">
+            <span>${c.id}</span>
+            <span class="badge ${c.kind}">${c.kind}</span>
+          </div>
+          <div class="verdict-tag ${c.recorded_verdict}">${c.recorded_verdict}</div>
+        </div>
+      `).join('');
+    }
+
+    async function selectCassette(id) {
+      currentCassetteId = id;
+      hideError();
+      divergenceMsgs = [];
+      
+      document.querySelectorAll('.cassette-item').forEach(el => {
+        el.classList.toggle('active', el.textContent.includes(id));
+      });
+
+      try {
+        const res = await fetch(`/api/cassettes/${id}`);
+        if (!res.ok) throw new Error(`Cassette ${id} not found`);
+        currentCassette = await res.json();
+        renderCassetteDetail(currentCassette);
+      } catch (err) {
+        showError(`Cassette ${id} could not be loaded.`);
+      }
+    }
+
+    function renderCassetteDetail(c) {
+      document.getElementById('scenario-title').textContent = `${c.cassette_id} — ${c.title}`;
+      document.getElementById('scenario-persona').textContent = `Persona: ${c.persona} | Verdict: ${c.recorded_verdict}`;
+
+      renderTapeTrack(c);
+      updateVerdictDisplay(c.recorded_verdict, c.recorded_verdict === 'CRASH' ? 'CRASH 1/1' : 'PASS 1/1', 0, 0);
+      renderTranscript(c.turns, c.crash_turn, c.assertions, []);
+    }
+
+    function renderTapeTrack(c) {
+      const trackEl = document.getElementById('tape-track');
+      trackEl.innerHTML = '<div id="playhead" class="playhead"></div>';
+
+      c.turns.forEach((turn) => {
+        const seg = document.createElement('div');
+        seg.className = 'tape-segment';
+        seg.textContent = `T${turn.n}`;
+
+        if (turn.tool_calls && turn.tool_calls.length > 0) {
+          const notch = document.createElement('div');
+          notch.className = 'tape-notch';
+          seg.appendChild(notch);
+        }
+
+        if (turn.n === c.crash_turn) {
+          const splice = document.createElement('div');
+          splice.className = 'tape-splice';
+          seg.appendChild(splice);
+        }
+
+        trackEl.appendChild(seg);
+      });
+    }
+
+    function renderTranscript(turns, crashTurn, assertions, divergences) {
+      const transcriptEl = document.getElementById('transcript');
+      const divMap = {};
+      (divergences || []).forEach(d => {
+        const match = d.match(/turn (\d+)/i);
+        if (match) divMap[parseInt(match[1])] = d;
+      });
+
+      transcriptEl.innerHTML = turns.map(turn => {
+        const isCrash = turn.n === crashTurn;
+        const divMsg = divMap[turn.n];
+
+        let toolCallsHtml = '';
+        if (turn.tool_calls && turn.tool_calls.length > 0) {
+          toolCallsHtml = turn.tool_calls.map(tc => `
+            <div class="tool-block">
+              <span class="tool-name">→ ${tc.name}</span>(${JSON.stringify(tc.args)})
+            </div>
+          `).join('');
+        }
+
+        let crashEvidenceHtml = '';
+        if (isCrash && assertions && assertions.length > 0) {
+          const firstAssert = assertions[0];
+          const assertStr = `${firstAssert.type}: ${firstAssert.tool || ''} ${firstAssert.rule || firstAssert.value || ''}`;
+          const obsArgs = (turn.tool_calls && turn.tool_calls.length > 0) ? JSON.stringify(turn.tool_calls[0].args) : 'N/A';
+
+          crashEvidenceHtml = `
+            <div class="crash-evidence">
+              <div class="crash-evidence-title">💥 Assertion Failure Evidence</div>
+              <div><strong>Failed Assertion:</strong> ${escapeHtml(assertStr)}</div>
+              <div><strong>Observed Args:</strong> ${escapeHtml(obsArgs)}</div>
+            </div>
+          `;
+        }
+
+        return `
+          <div class="turn-card ${isCrash ? 'crash-turn' : ''}">
+            <div class="turn-header">
+              <span class="role-label ${turn.role}">${turn.role}</span>
+              <span class="turn-number">Turn ${turn.n}</span>
+            </div>
+            ${turn.content ? `<div class="turn-content">${escapeHtml(turn.content)}</div>` : ''}
+            ${toolCallsHtml}
+            ${crashEvidenceHtml}
+            ${divMsg ? `<div class="divergence-banner">${escapeHtml(divMsg)}</div>` : ''}
+          </div>
+        `;
+      }).join('');
+    }
+
+    async function runReplay(mode) {
+      if (!currentCassetteId) return;
+
+      hideError();
+      const btnFrozen = document.getElementById('btn-replay-frozen');
+      const btnLive = document.getElementById('btn-replay-live');
+
+      btnFrozen.disabled = true;
+      btnLive.disabled = true;
+      const targetBtn = mode === 'frozen' ? btnFrozen : btnLive;
+      const origText = targetBtn.textContent;
+      targetBtn.textContent = 'Replaying...';
+
+      sweepPlayhead();
+
+      try {
+        const res = await fetch(`/api/replay/${currentCassetteId}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mode: mode, runs: 5 }),
+        });
+
+        if (!res.ok) {
+          const errData = await res.json();
+          throw new Error(errData.detail || 'Replay failed');
+        }
+
+        const data = await res.json();
+        divergenceMsgs = data.divergences || [];
+
+        const finalVerdict = data.verdicts.includes('CRASH') ? 'CRASH' : 
+                             (data.verdicts.includes('DIVERGED') ? 'DIVERGED' : 'PASS');
+
+        updateVerdictDisplay(finalVerdict, data.summary, data.duration_ms, data.network_calls);
+        renderTranscript(currentCassette.turns, data.crash_turn, currentCassette.assertions, data.divergences);
+
+      } catch (err) {
+        if (mode === 'verify') {
+          showError("Live replay needs OPENAI_API_KEY set in environment. Frozen replay still works offline.");
+        } else {
+          showError(`Replay error: ${err.message}`);
+        }
+      } finally {
+        btnFrozen.disabled = false;
+        btnLive.disabled = false;
+        btnFrozen.textContent = 'Replay frozen ×5';
+        btnLive.textContent = 'Replay live ×5';
+      }
+    }
+
+    function sweepPlayhead() {
+      const playhead = document.getElementById('playhead');
+      if (!playhead) return;
+
+      const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      if (prefersReduced) return;
+
+      playhead.style.display = 'block';
+      playhead.style.left = '0%';
+      playhead.style.transition = 'left 600ms linear';
+
+      requestAnimationFrame(() => {
+        playhead.style.left = '100%';
+      });
+
+      setTimeout(() => {
+        playhead.style.display = 'none';
+        playhead.style.left = '0%';
+      }, 650);
+    }
+
+    function updateVerdictDisplay(verdict, summary, duration, netCalls) {
+      const bigEl = document.getElementById('big-verdict');
+      bigEl.textContent = verdict;
+      bigEl.className = `big-verdict ${verdict}`;
+
+      document.getElementById('verdict-summary').textContent = summary;
+      document.getElementById('verdict-details').textContent = `duration: ${duration}ms | network calls: ${netCalls}`;
+    }
+
+    function showError(msg) {
+      const errEl = document.getElementById('error-toast');
+      errEl.textContent = msg;
+      errEl.style.display = 'block';
+    }
+
+    function hideError() {
+      const errEl = document.getElementById('error-toast');
+      errEl.style.display = 'none';
+    }
+
+    function escapeHtml(str) {
+      return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    }
+
+    window.onload = init;
+  </script>
+</body>
+</html>
