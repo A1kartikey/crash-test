@@ -351,3 +351,11 @@ START
   ▼
 FINAL DEMO
 ```
+
+---
+
+## Author & Maintainer
+
+Maintained by **Kartikey** ([@A1kartikey](https://github.com/A1kartikey)).
+
+

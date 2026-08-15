@@ -73,7 +73,7 @@ When a CrashTest cassette fails:
    adversarial pattern without disrupting legitimate requests.
 
 6. **Report results.**
-   Output before/after verdicts per cassette so the change is auditable.
+   Output before/after verdicts as per each cassette so the change is auditable.
 
 ## Quick Reference
 
